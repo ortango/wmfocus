@@ -16,6 +16,7 @@ codegen-units = 1
 
 [features]
 i3 = ["i3ipc"]
+bspwm = ["bspwmipc"]
 
 [dependencies]
 cairo-sys-rs = "0.14"
@@ -30,6 +31,7 @@ clap = { version = "3.0.0", features = ["derive", "wrap_help"] }
 xcb = "0.10"
 xkbcommon = "0.4"
 anyhow = "1"
+bspwmipc = { version = "0.0.1", optional = true, path = "/home/jason/projects/bspwmipc" }
 
 [dependencies.cairo-rs]
 version = "0.14"

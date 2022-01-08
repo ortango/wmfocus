@@ -17,6 +17,15 @@ mod wm_i3;
 #[cfg(feature = "i3")]
 use crate::wm_i3 as wm;
 
+#[cfg(feature = "bspwm")]
+extern crate bspwmipc;
+
+#[cfg(feature = "bspwm")]
+mod wm_bspwm;
+
+#[cfg(feature = "bspwm")]
+use crate::wm_bspwm as wm;
+
 #[derive(Debug)]
 pub struct DesktopWindow {
     id: i64,
@@ -34,7 +43,7 @@ pub struct RenderWindow<'a> {
     rect: (i32, i32, i32, i32),
 }
 
-#[cfg(any(feature = "i3", feature = "add_some_other_wm_here"))]
+#[cfg(any(feature = "i3", feature = "bspwm"))]
 fn main() -> Result<()> {
     pretty_env_logger::init();
     let app_config = args::parse_args();
@@ -325,12 +334,12 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(any(feature = "i3", feature = "add_some_other_wm_here")))]
+#[cfg(not(any(feature = "i3", feature = "bspwm")))]
 fn main() -> Result<()> {
     eprintln!(
         "You need to enable support for at least one window manager.\n
 Currently supported:
-    --features i3"
+    --features i3, bspwm"
     );
 
     Ok(())
