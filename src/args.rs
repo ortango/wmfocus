@@ -1,24 +1,10 @@
 use anyhow::{Context, Result};
-use clap::{ArgEnum, Parser};
+use clap::Parser;
 use css_color_parser::Color as CssColor;
 use font_loader::system_fonts;
 use log::{info, warn};
 
 use crate::utils;
-
-#[derive(ArgEnum, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum HorizontalAlign {
-    Left,
-    Center,
-    Right,
-}
-
-#[derive(ArgEnum, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum VerticalAlign {
-    Top,
-    Center,
-    Bottom,
-}
 
 /// Load a system font.
 fn load_font(font_family: &str) -> Result<Vec<u8>> {
@@ -61,24 +47,6 @@ fn parse_truetype_font(f: &str) -> Result<FontConfig> {
     Ok(font_config)
 }
 
-/// Validate coordinates and parse offset.
-fn parse_offset(c: &str) -> Result<Offset, String> {
-    let v: Vec<_> = c.split(',').collect();
-    let (x, y) = (
-        v.get(0)
-            .ok_or("Wrong coordinate format, expected x,y coordinates")?,
-        v.get(1)
-            .ok_or("Wrong coordinate format, expected x,y coordinates")?,
-    );
-    let offset = Offset {
-        x: x.parse::<i32>()
-            .map_err(|_| "Couldn't parse x coordinate")?,
-        y: y.parse::<i32>()
-            .map_err(|_| "Couldn't parse y coordinate")?,
-    };
-    Ok(offset)
-}
-
 /// Parse a color into a tuple of floats.
 fn parse_color(color_str: &str) -> Result<(f64, f64, f64, f64), String> {
     let color = color_str
@@ -90,12 +58,6 @@ fn parse_color(color_str: &str) -> Result<(f64, f64, f64, f64), String> {
         f64::from(color.b) / 255.0,
         f64::from(color.a),
     ))
-}
-
-#[derive(Debug)]
-pub struct Offset {
-    pub x: i32,
-    pub y: i32,
 }
 
 #[derive(Debug)]
@@ -117,7 +79,7 @@ pub struct AppConfig {
     pub font: FontConfig,
 
     /// Define a set of possbile values to use as hint characters
-    #[clap(short = 'c', long = "chars", default_value = "sadfjklewcmpgh")]
+    #[clap(short = 'c', long = "chars", default_value = "asdfjkl")]
     pub hint_chars: String,
 
     /// Add an additional margin around the text box (value is a factor of the box size)
@@ -148,48 +110,12 @@ pub struct AppConfig {
     #[clap(long = "bgcolorcurrent", display_order = 54, default_value = "rgba(200, 200, 200, 0.9)", parse(try_from_str = parse_color))]
     pub bg_color_current: (f64, f64, f64, f64),
 
-    /// Horizontal alignment of the box inside the window
-    #[clap(
-        long = "halign",
-        display_order = 100,
-        default_value = "left",
-        ignore_case = true,
-        arg_enum
-    )]
-    pub horizontal_align: HorizontalAlign,
-
-    /// Vertical alignment of the box inside the window
-    #[clap(
-        long = "valign",
-        display_order = 101,
-        default_value = "top",
-        ignore_case = true,
-        arg_enum
-    )]
-    pub vertical_align: VerticalAlign,
-
-    /// Completely fill out windows
-    #[clap(long, display_order = 102, conflicts_with_all(&["horizontal-align", "vertical-align", "margin", "offset"]))]
-    pub fill: bool,
-
-    /// Print the window id only but don't change focus
-    #[clap(short, long)]
-    pub print_only: bool,
-
-    /// Offset box from edge of window relative to alignment (x,y)
-    #[clap(short, long, allow_hyphen_values = true, default_value = "0,0", parse(try_from_str = parse_offset))]
-    pub offset: Offset,
-
     /// List of keys to exit application, sequences separator is space, key separator is '+', eg Control_L+g Shift_L+f
     #[clap(short, long, parse(from_str = parse_exit_keys))]
     pub exit_keys: Vec<utils::Sequence>,
 }
 
 pub fn parse_args() -> AppConfig {
-    let mut config = AppConfig::parse();
-    if config.fill {
-        config.horizontal_align = HorizontalAlign::Center;
-        config.vertical_align = VerticalAlign::Center;
-    }
+    let config = AppConfig::parse();
     config
 }

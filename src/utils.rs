@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use xcb::ffi::xcb_visualid_t;
 
 use crate::args::AppConfig;
-use crate::{DesktopWindow, RenderWindow};
+use crate::{HintDef, RenderWindow};
 
 /// Given a list of `current_hints` and a bunch of `hint_chars`, this finds a unique combination
 /// of characters that doesn't yet exist in `current_hints`. `max_count` is the maximum possible
@@ -57,7 +57,6 @@ pub fn find_visual(conn: &xcb::Connection, visual: xcb_visualid_t) -> Option<xcb
 
 pub fn extents_for_text(text: &str, family: &str, size: f64) -> Result<cairo::TextExtents> {
     // Create a buffer image that should be large enough.
-    // TODO: Figure out the maximum size from the largest window on the desktop.
     // For now we'll use made-up maximum values.
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1024, 1024)
         .context("Couldn't create ImageSurface")?;
@@ -78,7 +77,7 @@ pub fn draw_hint_text(
     // Paint background.
     rw.cairo_context.set_operator(cairo::Operator::Source);
 
-    if rw.desktop_window.is_focused {
+    if rw.hint_def.highlight {
         rw.cairo_context.set_source_rgb(
             app_config.bg_color_current.0,
             app_config.bg_color_current.1,
@@ -103,7 +102,7 @@ pub fn draw_hint_text(
     rw.cairo_context.move_to(rw.draw_pos.0, rw.draw_pos.1);
     if text.starts_with(current_hints) {
         // Paint already selected chars.
-        if rw.desktop_window.is_focused {
+        if rw.hint_def.highlight {
             rw.cairo_context.set_source_rgba(
                 app_config.text_color_current_alt.0,
                 app_config.text_color_current_alt.1,
@@ -126,7 +125,7 @@ pub fn draw_hint_text(
     }
 
     // Paint unselected chars.
-    if rw.desktop_window.is_focused {
+    if rw.hint_def.highlight {
         rw.cairo_context.set_source_rgba(
             app_config.text_color_current.0,
             app_config.text_color_current.1,
@@ -217,10 +216,10 @@ pub fn snatch_mouse(conn: &xcb::Connection, screen: &xcb::Screen, timeout: Durat
     }
 }
 
-/// Sort list of `DesktopWindow`s by position.
+/// Sort list of `HintDef`s by position.
 ///
 /// This sorts by column first and row second.
-pub fn sort_by_pos(mut dws: Vec<DesktopWindow>) -> Vec<DesktopWindow> {
+pub fn sort_by_pos(mut dws: Vec<HintDef>) -> Vec<HintDef> {
     dws.sort_by_key(|w| w.pos.0);
     dws.sort_by_key(|w| w.pos.1);
     dws

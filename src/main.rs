@@ -4,46 +4,54 @@ use std::collections::HashMap;
 use std::iter::Iterator;
 use std::time::Duration;
 use xkbcommon::xkb;
+use serde::Deserialize;
+use std::io;
 
 mod args;
 mod utils;
 
-#[cfg(feature = "i3")]
-extern crate i3ipc;
-
-#[cfg(feature = "i3")]
-mod wm_i3;
-
-#[cfg(feature = "i3")]
-use crate::wm_i3 as wm;
-
-#[derive(Debug)]
-pub struct DesktopWindow {
-    id: i64,
-    x_window_id: Option<i32>,
+//////////////////////////////////////////////////////////////////////////
+//DesktopWindow -> HintDef
+//id -> value
+//is_focused -> highlight
+//TODO: value should be a string.
+#[derive(Deserialize, Debug)]
+pub struct HintDef {
+    value: i64,
     pos: (i32, i32),
-    size: (i32, i32),
-    is_focused: bool,
+    #[serde(default)]
+    highlight: bool
 }
 
+//////////////////////////////////////////////////////////////////////////
+//desktop_window -> hint_def
 #[derive(Debug)]
 pub struct RenderWindow<'a> {
-    desktop_window: &'a DesktopWindow,
+    hint_def: &'a HintDef,
     cairo_context: cairo::Context,
     draw_pos: (f64, f64),
     rect: (i32, i32, i32, i32),
 }
 
-#[cfg(any(feature = "i3", feature = "add_some_other_wm_here"))]
+fn read_defs_from_stdin() -> Result<Vec<HintDef>> {
+	let reader = serde_json::from_reader(io::stdin())?;
+	Ok(reader)
+}
+
 fn main() -> Result<()> {
     pretty_env_logger::init();
     let app_config = args::parse_args();
 
+    /////////////////////////////////////////////////////////////////////////
+    //new static stdin impl. here:
+    //desktop_windows_raw -> hint_defs_raw
     // Get the windows from each specific window manager implementation.
-    let desktop_windows_raw = wm::get_windows().context("Couldn't get desktop windows")?;
+    let hint_defs_raw = read_defs_from_stdin().context("Couldn't parse hints")?;
 
+    /////////////////////////////////////////////////////////////////////////
+    //desktop_windows -> hint_defs
     // Sort by position to make hint position more deterministic.
-    let desktop_windows = utils::sort_by_pos(desktop_windows_raw);
+    let hint_defs = utils::sort_by_pos(hint_defs_raw);
 
     let (conn, screen_num) = xcb::Connection::connect(None).context("No Xorg connection")?;
     let setup = conn.get_setup();
@@ -66,13 +74,13 @@ fn main() -> Result<()> {
 
     // Assemble RenderWindows from DesktopWindows.
     let mut render_windows = HashMap::new();
-    for desktop_window in &desktop_windows {
+    for hint_def in &hint_defs {
         // We need to estimate the font size before rendering because we want the window to only be
         // the size of the font.
         let hint = utils::get_next_hint(
             render_windows.keys().collect(),
             &app_config.hint_chars,
-            desktop_windows.len(),
+            hint_defs.len(),
         )
         .context("Couldn't get next hint")?;
 
@@ -83,14 +91,7 @@ fn main() -> Result<()> {
             app_config.font.font_size,
         )
         .context("Couldn't create extents for text")?;
-        let (width, height, margin_width, margin_height) = if app_config.fill {
-            (
-                desktop_window.size.0 as u16,
-                desktop_window.size.1 as u16,
-                (f64::from(desktop_window.size.0) - text_extents.width) / 2.0,
-                (f64::from(desktop_window.size.1) - text_extents.height) / 2.0,
-            )
-        } else {
+        let (width, height, margin_width, margin_height) = {
             let margin_factor = 1.0 + 0.2;
             (
                 (text_extents.width * margin_factor).round() as u16,
@@ -111,31 +112,12 @@ fn main() -> Result<()> {
         );
 
         debug!(
-            "Spawning RenderWindow for this DesktopWindow: {:?}",
-            desktop_window
+            "Spawning RenderWindow for this HintDef: {:?}",
+            hint_def
         );
 
-        let x_offset = app_config.offset.x;
-        let mut x = match app_config.horizontal_align {
-            args::HorizontalAlign::Left => (desktop_window.pos.0 + x_offset) as i16,
-            args::HorizontalAlign::Center => {
-                (desktop_window.pos.0 + desktop_window.size.0 / 2 - i32::from(width) / 2) as i16
-            }
-            args::HorizontalAlign::Right => {
-                (desktop_window.pos.0 + desktop_window.size.0 - i32::from(width) - x_offset) as i16
-            }
-        };
-
-        let y_offset = app_config.offset.y;
-        let y = match app_config.vertical_align {
-            args::VerticalAlign::Top => (desktop_window.pos.1 + y_offset) as i16,
-            args::VerticalAlign::Center => {
-                (desktop_window.pos.1 + desktop_window.size.1 / 2 - i32::from(height) / 2) as i16
-            }
-            args::VerticalAlign::Bottom => {
-                (desktop_window.pos.1 + desktop_window.size.1 - i32::from(height) - y_offset) as i16
-            }
-        };
+        let mut x = hint_def.pos.0 as i16;
+        let y = hint_def.pos.1 as i16;
 
         // If this is overlapping then we'll nudge the new RenderWindow a little bit out of the
         // way.
@@ -213,7 +195,7 @@ fn main() -> Result<()> {
             cairo::Context::new(&surface).context("Couldn't create Cairo Context")?;
 
         let render_window = RenderWindow {
-            desktop_window,
+            hint_def,
             cairo_context,
             draw_pos,
             rect: (x.into(), y.into(), width.into(), height.into()),
@@ -294,12 +276,7 @@ fn main() -> Result<()> {
                             utils::remove_last_key(&mut pressed_keys, kstr);
                         } else if let Some(rw) = &render_windows.get(&pressed_keys) {
                             info!("Found matching window, focusing");
-                            if app_config.print_only {
-                                println!("0x{:x}", rw.desktop_window.x_window_id.unwrap_or(0));
-                            } else {
-                                wm::focus_window(rw.desktop_window)
-                                    .context("Couldn't focus window")?;
-                            }
+                            println!("{}", rw.hint_def.value);
                             closed = true;
                         } else if !pressed_keys.is_empty()
                             && render_windows.keys().any(|k| k.starts_with(&pressed_keys))
@@ -321,17 +298,6 @@ fn main() -> Result<()> {
             }
         }
     }
-
-    Ok(())
-}
-
-#[cfg(not(any(feature = "i3", feature = "add_some_other_wm_here")))]
-fn main() -> Result<()> {
-    eprintln!(
-        "You need to enable support for at least one window manager.\n
-Currently supported:
-    --features i3"
-    );
 
     Ok(())
 }
