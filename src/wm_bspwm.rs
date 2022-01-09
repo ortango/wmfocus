@@ -8,14 +8,14 @@ fn clienttowindow(id: u32, client: &client_t, focused: bool) -> DesktopWindow {
 	let rectangle = client.getgeometry();
 	let (pos_x, pos_y, size_x, size_y) = (rectangle.x, rectangle.y, rectangle.width, rectangle.height);
 	let xwinid: Option<i32> = Some(id as i32);
-	let window = DesktopWindow {
+	
+	DesktopWindow {
 		id: id.into(),
 		x_window_id: xwinid,
 		pos: (pos_x.into(), pos_y.into()),
 		size: (size_x.into(), size_y.into()),
 		is_focused: focused,
-	};
-	return window;
+	}
 }
 
 pub fn get_windows() -> Result<Vec<DesktopWindow>> {
