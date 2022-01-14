@@ -31,7 +31,7 @@ clap = { version = "3.0.0", features = ["derive", "wrap_help"] }
 xcb = "0.10"
 xkbcommon = "0.4"
 anyhow = "1"
-bspwmipc = { version = "0.0.2", optional = true, path = "../bspwmipc" }
+bspwmipc = { git = "https://github.com/ortango/bspwmipc", optional = true }
 
 [dependencies.cairo-rs]
 version = "0.14"
