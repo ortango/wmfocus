@@ -20,7 +20,7 @@ fn client_to_window(id: u32, client: &Client, focused: bool) -> DesktopWindow {
 
 pub fn get_windows() -> Result<Vec<DesktopWindow>> {
     let mut connection = BspwmConnection::connect().context("Couldn't acquire bspwm connection")?;
-    let state: BspwmState = connection.get_bspwm_state();
+    let state: BspwmState = connection.get_bspwm_state()?;
     let mut windows = vec![];
     for mon in state.monitors {
         for desk in mon.desktops {
@@ -45,6 +45,6 @@ pub fn get_windows() -> Result<Vec<DesktopWindow>> {
 pub fn focus_window(window: &DesktopWindow) -> Result<()> {
     let mut connection = BspwmConnection::connect().context("Couldn't acquire bspwm connection")?;
     let command_str = format!("node {} -f", window.id);
-    connection.raw_command(&command_str);
+    connection.raw_command(&command_str)?;
     Ok(())
 }
