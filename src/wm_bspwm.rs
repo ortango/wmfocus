@@ -1,42 +1,40 @@
 use anyhow::{Context, Result};
-use bspwmipc::reply::{BspwmState, Client, Node};
+use bspwmipc::reply::{Monitor, Node};
 use bspwmipc::BspwmConnection;
 
 use crate::DesktopWindow;
 
-fn client_to_window(id: u32, client: &Client, focused: bool) -> DesktopWindow {
-    let rectangle = client.get_geometry();
-    let (pos_x, pos_y, size_x, size_y) =
-        (rectangle.x, rectangle.y, rectangle.width, rectangle.height);
-    let xwinid: Option<i32> = Some(id as i32);
+fn client_to_window(node: &Node, focused_node_id: u32) -> DesktopWindow {
+    let rectangle = node.client.as_ref().unwrap().get_geometry();
     DesktopWindow {
-        id: id.into(),
-        x_window_id: xwinid,
-        pos: (pos_x.into(), pos_y.into()),
-        size: (size_x.into(), size_y.into()),
-        is_focused: focused,
+        id: node.id.into(),
+        x_window_id: Some(node.id as i32),
+        pos: (rectangle.x.into(), rectangle.y.into()),
+        size: (rectangle.width.into(), rectangle.height.into()),
+        is_focused: node.id == focused_node_id,
     }
 }
 
 pub fn get_windows() -> Result<Vec<DesktopWindow>> {
     let mut connection = BspwmConnection::connect().context("Couldn't acquire bspwm connection")?;
-    let state: BspwmState = connection.get_bspwm_state()?;
+    let monitors: Vec<Monitor> = connection.get_bspwm_state()?.monitors;
     let mut windows = vec![];
-    for mon in state.monitors {
-        for desk in mon.desktops {
-            if desk.id == mon.focused_desktop_id {
-                if let Some(tree) = desk.root {
-                    let nodes: Vec<&Node> = tree.traverse();
-                    for node in nodes {
-                        if node.client.is_some() && !node.hidden {
-                            let focused: bool = node.id == desk.focused_node_id;
-                            let window: DesktopWindow =
-                                client_to_window(node.id, node.client.as_ref().unwrap(), focused);
-                            windows.push(window);
-                        }
-                    }
+    for mon in monitors {
+        for desk in mon
+            .desktops
+            .iter()
+            .filter(|&d| d.id == mon.focused_desktop_id)
+        {
+            if let Some(tree) = &desk.root {
+                let nodes: Vec<&Node> = tree
+                    .traverse()
+                    .into_iter()
+                    .filter(|&n| !n.hidden && n.client.is_some())
+                    .collect();
+                for node in nodes {
+                    windows.push(client_to_window(node, desk.focused_node_id));
                 }
-            }
+            };
         }
     }
     Ok(windows)
